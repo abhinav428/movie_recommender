@@ -22,15 +22,22 @@ class MovieRecommender:
         movies = pd.read_csv(movies_csv)
         credits = pd.read_csv(credits_csv)
 
-        # Merge datasets correctly if possible
+        # Prefer ID-based merge (correct way for TMDB datasets)
         if "id" in movies.columns and "movie_id" in credits.columns:
             df = movies.merge(credits, left_on="id", right_on="movie_id")
         else:
             df = movies.merge(credits, on="title")
 
+        # ---- FIX: ensure we have a single 'title' column ----
+        if "title_x" in df.columns:
+            df["title"] = df["title_x"]
+        elif "title_y" in df.columns:
+            df["title"] = df["title_y"]
+
         df = self._preprocess(df)
         self._build_model(df)
         self._save()
+
 
     def load(self):
         self.movies = self._load_pickle("movies.pkl")
@@ -61,11 +68,13 @@ class MovieRecommender:
     # Internal functions
     def _preprocess(self, df):
         cols = ["title", "overview", "genres", "keywords", "cast", "crew"]
+        cols = [c for c in cols if c in df.columns]  # keep only existing cols
         df = df[cols]
         df.dropna(subset=["title", "overview"], inplace=True)
 
         df["soup"] = df.apply(self._create_soup, axis=1)
         return df.reset_index(drop=True)
+
 
     def _create_soup(self, row):
         def extract_names(obj, max_items=None, job=None):
