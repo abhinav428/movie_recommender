@@ -17,14 +17,12 @@ class MovieRecommender:
         self.similarity = None
         self.title_to_index = None
 
-    # --------------------------------------------------------------------
-    # Public Methods
-    # --------------------------------------------------------------------
+    # Public API
     def fit_from_raw(self, movies_csv, credits_csv):
         movies = pd.read_csv(movies_csv)
         credits = pd.read_csv(credits_csv)
 
-        # Try correct merge on IDs first
+        # Merge datasets correctly if possible
         if "id" in movies.columns and "movie_id" in credits.columns:
             df = movies.merge(credits, left_on="id", right_on="movie_id")
         else:
@@ -39,40 +37,41 @@ class MovieRecommender:
         self.tfidf = self._load_pickle("tfidf.pkl")
         self.similarity = self._load_pickle("similarity.pkl")
 
-        self.title_to_index = {t.lower(): i for i, t in enumerate(self.movies["title"])}
+        self.title_to_index = {
+            t.lower(): i for i, t in enumerate(self.movies["title"])
+        }
 
     def recommend(self, title, top_n=5):
         if self.movies is None:
             raise RuntimeError("Model not loaded. Call load() first.")
 
-        key = title.lower()
+        title = title.lower()
 
-        if key not in self.title_to_index:
-            key = self._fuzzy(key)
-            if not key:
+        if title not in self.title_to_index:
+            title = self._fuzzy_match(title)
+            if not title:
                 return []
 
-        idx = self.title_to_index[key]
+        idx = self.title_to_index[title]
         scores = list(enumerate(self.similarity[idx]))
         scores = sorted(scores, key=lambda x: x[1], reverse=True)[1 : top_n + 1]
 
-        return [(self.movies.iloc[i].title, float(score)) for i, score in scores]
+        return [(self.movies.iloc[i].title, float(s)) for i, s in scores]
 
-    # --------------------------------------------------------------------
-    # Internal Functions
-    # --------------------------------------------------------------------
+    # Internal functions
     def _preprocess(self, df):
-        df = df[["title", "overview", "genres", "keywords", "cast", "crew"]]
+        cols = ["title", "overview", "genres", "keywords", "cast", "crew"]
+        df = df[cols]
         df.dropna(subset=["title", "overview"], inplace=True)
 
         df["soup"] = df.apply(self._create_soup, axis=1)
         return df.reset_index(drop=True)
 
     def _create_soup(self, row):
-        def parse(obj, max_items=None, job=None):
+        def extract_names(obj, max_items=None, job=None):
             try:
                 items = ast.literal_eval(obj)
-            except:
+            except Exception:
                 return []
 
             result = []
@@ -84,10 +83,10 @@ class MovieRecommender:
             return result
 
         overview = row["overview"]
-        genres = " ".join(parse(row["genres"]))
-        keywords = " ".join(parse(row["keywords"]))
-        cast = " ".join(parse(row["cast"], max_items=3))
-        director = " ".join(parse(row["crew"], job="Director"))
+        genres = " ".join(extract_names(row["genres"]))
+        keywords = " ".join(extract_names(row["keywords"]))
+        cast = " ".join(extract_names(row["cast"], max_items=3))
+        director = " ".join(extract_names(row["crew"], job="Director"))
 
         return f"{overview} {genres} {keywords} {cast} {director}"
 
@@ -97,21 +96,25 @@ class MovieRecommender:
         tfidf_matrix = self.tfidf.fit_transform(df["soup"])
         self.similarity = cosine_similarity(tfidf_matrix)
 
-        self.title_to_index = {t.lower(): i for i, t in enumerate(df["title"])}
+        self.title_to_index = {
+            t.lower(): i for i, t in enumerate(df["title"])
+        }
 
+    # Save / Load
     def _save(self):
         self._save_pickle(self.movies, "movies.pkl")
         self._save_pickle(self.tfidf, "tfidf.pkl")
         self._save_pickle(self.similarity, "similarity.pkl")
 
-    def _save_pickle(self, obj, name):
-        with open(self.model_dir / name, "wb") as f:
+    def _save_pickle(self, obj, filename):
+        with open(self.model_dir / filename, "wb") as f:
             pickle.dump(obj, f)
 
-    def _load_pickle(self, name):
-        with open(self.model_dir / name, "rb") as f:
+    def _load_pickle(self, filename):
+        with open(self.model_dir / filename, "rb") as f:
             return pickle.load(f)
 
-    def _fuzzy(self, key):
-        matches = get_close_matches(key, self.title_to_index.keys(), n=1, cutoff=0.6)
+    # Fuzzy search helper
+    def _fuzzy_match(self, title):
+        matches = get_close_matches(title, self.title_to_index.keys(), n=1, cutoff=0.6)
         return matches[0] if matches else None
