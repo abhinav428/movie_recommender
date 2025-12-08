@@ -18,6 +18,7 @@ class MovieRecommender:
         self.title_to_index = None
 
     # Public API
+        # Public API
     def fit_from_raw(self, movies_csv, credits_csv):
         movies = pd.read_csv(movies_csv)
         credits = pd.read_csv(credits_csv)
@@ -28,15 +29,23 @@ class MovieRecommender:
         else:
             df = movies.merge(credits, on="title")
 
-        # ---- FIX: ensure we have a single 'title' column ----
-        if "title_x" in df.columns:
-            df["title"] = df["title_x"]
-        elif "title_y" in df.columns:
-            df["title"] = df["title_y"]
+        # ---- Ensure we have a single 'title' column ----
+        title_col = None
+        for cand in ["title", "title_x", "title_y", "original_title"]:
+            if cand in df.columns:
+                title_col = cand
+                break
+
+        if title_col is None:
+            # If this ever triggers, print columns so we know what's going on
+            raise ValueError(f"No usable title column found. Columns: {list(df.columns)}")
+
+        df["title"] = df[title_col]
 
         df = self._preprocess(df)
         self._build_model(df)
         self._save()
+
 
 
     def load(self):
@@ -68,12 +77,17 @@ class MovieRecommender:
     # Internal functions
     def _preprocess(self, df):
         cols = ["title", "overview", "genres", "keywords", "cast", "crew"]
-        cols = [c for c in cols if c in df.columns]  # keep only existing cols
-        df = df[cols]
-        df.dropna(subset=["title", "overview"], inplace=True)
+        cols = [c for c in cols if c in df.columns]
+        df = df[cols].copy()   # <-- add .copy() here
 
+        if "title" not in df.columns or "overview" not in df.columns:
+            raise ValueError("Required columns 'title' or 'overview' missing after preprocessing.")
+
+        df.dropna(subset=["title", "overview"], inplace=True)
         df["soup"] = df.apply(self._create_soup, axis=1)
         return df.reset_index(drop=True)
+
+
 
 
     def _create_soup(self, row):
