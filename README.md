@@ -10,6 +10,11 @@ It recommends movies based on similarity between:
 
 ---
 
+## 🔗 Live Demo
+
+Streamlit App: https://movie-recommender-on.streamlit.app/
+---
+
 ## 🚀 Features
 ✔ Uses **TF-IDF Vectorizer** for text representation  
 ✔ **Cosine Similarity** for recommendation rankings  
@@ -22,7 +27,6 @@ It recommends movies based on similarity between:
 
 TMDB 5000 Movies + Credits Dataset  
 🔗 Source: https://www.kaggle.com/datasets/tmdb/tmdb-movie-metadata  
-⚠️ Dataset **not included** in the repo due to large file size  
 Place `tmdb_5000_movies.csv` and `tmdb_5000_credits.csv` in the same directory as the notebook before running.
 
 ---
@@ -33,7 +37,7 @@ Place `tmdb_5000_movies.csv` and `tmdb_5000_credits.csv` in the same directory a
 - Scikit-learn (TF-IDF + Cosine Similarity)
 - NLTK (optional text preprocessing)
 - difflib (fuzzy matching)
-
+- Streamlit
 ---
 
 ## ▶️ How to Run
